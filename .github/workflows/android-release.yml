@@ -18,6 +18,7 @@ jobs:
   build-release-apk:
     name: Build signed release APK
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: apps/mobile
@@ -60,7 +61,7 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
       - name: Build release APK
-        run: cd android && ./gradlew assembleRelease
+        run: cd android && ./gradlew --no-daemon --console=plain --stacktrace assembleRelease
 
       - name: Collect APK
         run: |
