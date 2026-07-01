@@ -10,3 +10,5 @@ coverage/
 !*.env.example
 # cloned upstream projects used only for local design/protocol analysis
 references/
+
+.runtime/
