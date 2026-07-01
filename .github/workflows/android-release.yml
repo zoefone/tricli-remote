@@ -61,7 +61,12 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
       - name: Build release APK
-        run: cd android && ./gradlew --no-daemon --console=plain --stacktrace assembleRelease
+        timeout-minutes: 25
+        env:
+          GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx3g -Dkotlin.daemon.jvm.options=-Xmx1g
+        run: |
+          cd android
+          ./gradlew --no-daemon --console=plain --info --stacktrace assembleRelease
 
       - name: Collect APK
         run: |
