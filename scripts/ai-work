@@ -1,0 +1,258 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  ai-work codex [args...]       # enter persistent Codex tmux session
+  ai-work claude [args...]      # enter persistent Claude Code tmux session
+  ai-work cursor [args...]      # enter persistent Cursor agent tmux session
+  ai-work ensure PROVIDER [--cwd DIR] [args...]  # start provider session detached if missing
+  ai-work capture PROVIDER [LINES]               # print recent tmux pane output
+  ai-work send PROVIDER TEXT                     # paste text and press Enter
+  ai-work keys PROVIDER KEY [KEY...]             # send tmux key names, e.g. C-c Enter
+  ai-work status PROVIDER                        # print provider status
+  ai-work list | ai-work list-json               # list tmux sessions
+  ai-work attach NAME|PROVIDER                   # attach/switch to session
+  ai-work kill NAME|PROVIDER                     # kill tmux session
+
+Shortcuts:
+  codex-work, claude-work, cursor-work
+
+Remote-control note:
+  The ensure/capture/send/keys commands are non-interactive and are intended for
+  TriCLI Remote. They use the same tmux sessions as codex-work/claude-work/
+  cursor-work, so the CLI keeps running even when Web/App clients disconnect.
+USAGE
+}
+
+need_tty() {
+  if [ ! -t 0 ] || [ ! -t 1 ]; then
+    echo "This command needs an interactive terminal/TTY." >&2
+    exit 2
+  fi
+}
+
+join_cmd() {
+  local out="" q
+  for q in "$@"; do
+    printf -v q '%q' "$q"
+    out+="${out:+ }$q"
+  done
+  printf '%s' "$out"
+}
+
+provider_session_name() {
+  case "$1" in
+    codex) echo ai-codex ;;
+    claude|claudecode|claude-code) echo ai-claude ;;
+    cursor) echo ai-cursor ;;
+    ai-codex|ai-claude|ai-cursor) echo "$1" ;;
+    *) echo "$1" ;;
+  esac
+}
+
+provider_command() {
+  local provider="$1"; shift || true
+  case "$provider" in
+    codex)
+      command -v codex >/dev/null || { echo "codex not found" >&2; exit 127; }
+      join_cmd codex --yolo "$@"
+      ;;
+    claude|claudecode|claude-code)
+      command -v claude >/dev/null || { echo "claude not found" >&2; exit 127; }
+      join_cmd claude "$@"
+      ;;
+    cursor)
+      if command -v cursor-agent >/dev/null 2>&1; then
+        join_cmd cursor-agent "$@"
+      elif command -v cursor >/dev/null 2>&1; then
+        join_cmd cursor "$@"
+      else
+        echo "cursor-agent/cursor not found" >&2; exit 127
+      fi
+      ;;
+    *)
+      echo "Unknown provider: $provider" >&2
+      exit 2
+      ;;
+  esac
+}
+
+session_exists() {
+  tmux has-session -t "$1" 2>/dev/null
+}
+
+switch_or_attach() {
+  local name
+  name="$(provider_session_name "$1")"
+  need_tty
+  if [ -n "${TMUX:-}" ]; then
+    exec tmux switch-client -t "$name"
+  else
+    exec tmux attach -t "$name"
+  fi
+}
+
+start_detached() {
+  local provider="$1"; shift
+  local cwd="${TRICLI_WORK_CWD:-$PWD}"
+  if [ "${1:-}" = "--cwd" ]; then
+    cwd="$2"
+    shift 2
+  fi
+  local name cmdline
+  name="$(provider_session_name "$provider")"
+  cmdline="$(provider_command "$provider" "$@")"
+  if session_exists "$name"; then
+    echo "running $name"
+    return 0
+  fi
+  mkdir -p "$cwd"
+  tmux new-session -d -s "$name" -c "$cwd" "$cmdline"
+  echo "started $name"
+}
+
+start_or_attach() {
+  local provider="$1"; shift
+  local name cmdline
+  name="$(provider_session_name "$provider")"
+  cmdline="$(provider_command "$provider" "$@")"
+  need_tty
+
+  if session_exists "$name"; then
+    switch_or_attach "$name"
+  fi
+
+  echo "Starting persistent tmux session: $name"
+  echo "Command: $cmdline"
+  echo "Detach without stopping it: Ctrl-b then d"
+  echo "Reattach later: ai-work attach $name"
+  sleep 1
+
+  if [ -n "${TMUX:-}" ]; then
+    tmux new-session -d -s "$name" "$cmdline"
+    exec tmux switch-client -t "$name"
+  else
+    exec tmux new-session -s "$name" "$cmdline"
+  fi
+}
+
+capture_provider() {
+  local name lines
+  name="$(provider_session_name "$1")"
+  lines="${2:-200}"
+  session_exists "$name" || { echo "session $name not running" >&2; exit 3; }
+  tmux capture-pane -t "$name" -p -S "-${lines}"
+}
+
+send_provider() {
+  local name text
+  name="$(provider_session_name "$1")"
+  shift
+  text="$*"
+  session_exists "$name" || { echo "session $name not running" >&2; exit 3; }
+  # send-keys -l writes literal bytes into the pane. It is more reliable
+  # than paste-buffer for non-interactive programs that read stdin directly,
+  # while still preserving tmux session persistence for remote-control use.
+  tmux send-keys -t "$name" -l "$text"
+  tmux send-keys -t "$name" C-m
+  echo "sent $name"
+}
+
+keys_provider() {
+  local name
+  name="$(provider_session_name "$1")"
+  shift
+  session_exists "$name" || { echo "session $name not running" >&2; exit 3; }
+  tmux send-keys -t "$name" "$@"
+  echo "keys $name"
+}
+
+status_provider() {
+  local name
+  name="$(provider_session_name "$1")"
+  if session_exists "$name"; then
+    tmux display-message -p -t "$name" "running #{session_name} #{session_created} #{pane_current_command} #{pane_current_path}"
+  else
+    echo "stopped $name"
+    exit 3
+  fi
+}
+
+list_json() {
+  python3 - <<'PYJSON'
+import json, subprocess
+try:
+    out=subprocess.check_output(['tmux','list-sessions','-F','#{session_name}\t#{session_created}\t#{session_windows}\t#{session_attached}'], text=True, stderr=subprocess.DEVNULL)
+except subprocess.CalledProcessError:
+    print('[]')
+    raise SystemExit
+rows=[]
+for line in out.splitlines():
+    name, created, windows, attached=(line.split('\t')+['','','',''])[:4]
+    rows.append({'name':name,'created':int(created or 0),'windows':int(windows or 0),'attached':int(attached or 0)})
+print(json.dumps(rows, ensure_ascii=False))
+PYJSON
+}
+
+case "${1:-}" in
+  codex)
+    shift || true
+    start_or_attach codex "$@"
+    ;;
+  claude|claudecode|claude-code)
+    sub="$1"; shift || true
+    start_or_attach "$sub" "$@"
+    ;;
+  cursor)
+    shift || true
+    start_or_attach cursor "$@"
+    ;;
+  ensure)
+    [ -n "${2:-}" ] || { echo "Missing provider" >&2; usage; exit 2; }
+    sub="$2"; shift 2
+    start_detached "$sub" "$@"
+    ;;
+  capture)
+    [ -n "${2:-}" ] || { echo "Missing provider" >&2; usage; exit 2; }
+    capture_provider "$2" "${3:-200}"
+    ;;
+  send)
+    [ -n "${2:-}" ] && [ -n "${3:-}" ] || { echo "Usage: ai-work send PROVIDER TEXT" >&2; exit 2; }
+    sub="$2"; shift 2
+    send_provider "$sub" "$@"
+    ;;
+  keys)
+    [ -n "${2:-}" ] && [ -n "${3:-}" ] || { echo "Usage: ai-work keys PROVIDER KEY..." >&2; exit 2; }
+    sub="$2"; shift 2
+    keys_provider "$sub" "$@"
+    ;;
+  status)
+    [ -n "${2:-}" ] || { echo "Missing provider" >&2; usage; exit 2; }
+    status_provider "$2"
+    ;;
+  list|ls)
+    tmux ls 2>/dev/null || echo "No tmux sessions."
+    ;;
+  list-json)
+    list_json
+    ;;
+  attach)
+    [ -n "${2:-}" ] || { echo "Missing session name" >&2; usage; exit 2; }
+    switch_or_attach "$2"
+    ;;
+  kill|stop)
+    [ -n "${2:-}" ] || { echo "Missing session name" >&2; usage; exit 2; }
+    name="$(provider_session_name "$2")"
+    exec tmux kill-session -t "$name"
+    ;;
+  -h|--help|help|"")
+    usage
+    ;;
+  *)
+    echo "Unknown subcommand: ${1:-}" >&2
+    usage
+    exit 2
+    ;;
+esac

@@ -1,0 +1,27 @@
+{
+  "name": "@tricli/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo/AppEntry",
+  "scripts": {
+    "android": "expo run:android",
+    "start": "expo start",
+    "lint": "echo \"TODO: add eslint once Expo deps are installed\""
+  },
+  "dependencies": {
+    "@expo/vector-icons": "latest",
+    "expo": "latest",
+    "expo-document-picker": "latest",
+    "expo-file-system": "latest",
+    "expo-notifications": "latest",
+    "expo-router": "latest",
+    "react": "latest",
+    "react-native": "latest",
+    "react-native-safe-area-context": "latest",
+    "react-native-screens": "latest"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "typescript": "^6.0.3"
+  }
+}

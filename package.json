@@ -1,0 +1,26 @@
+{
+  "name": "tricli-remote",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Remote control for Codex, Claude Code, and Cursor Agent across Web and Android.",
+  "scripts": {
+    "start:server": "node apps/server/server.js",
+    "start:daemon": "node apps/daemon/daemon.js",
+    "dev:server": "TRICLI_SERVER_PORT=7320 node apps/server/server.js",
+    "dev:daemon": "TRICLI_DAEMON_PORT=7317 node apps/daemon/daemon.js",
+    "test": "node --test tests/*.test.js",
+    "smoke": "node scripts/smoke.js",
+    "check:syntax": "node --check apps/server/server.js && node --check apps/daemon/daemon.js && node --check apps/web/app.js && node --check packages/core/protocol.js && node --check packages/core/adapters.js && node --check packages/core/codex-app-server.js && node --check packages/core/claude-stream-json.js && node --check packages/core/cursor-stream-json.js",
+    "check:mobile": "cd apps/mobile && npx tsc --noEmit --jsx react-jsx --moduleResolution bundler --module esnext --target es2020 --allowSyntheticDefaultImports --skipLibCheck App.tsx src/*.ts",
+    "check:all": "npm run check:syntax && npm test && npm run check:mobile && npm run smoke",
+    "install:work-commands": "bash scripts/install-work-commands.sh"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>TriCLI Remote</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero glass">
+        <div>
+          <p class="eyebrow">TriCLI Remote</p>
+          <h1>一个平台远程控制 Codex / Claude Code / Cursor Agent</h1>
+          <p class="sub">同局域网直连；跨网通过你的公网服务器 relay / 反向隧道。会话复用 <code>codex-work</code>、<code>claude-work</code>、<code>cursor-work</code> 的 tmux 持久工作区，断开控制端后仍继续运行。</p>
+        </div>
+        <div class="status-card">
+          <span class="pulse"></span>
+          <strong id="connectionLabel">未连接</strong>
+          <small id="connectionHint">选择机器或输入 daemon URL</small>
+        </div>
+      </header>
+
+      <section class="grid two">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h2>连接</h2>
+              <p>服务器 relay 或 LAN daemon 直连</p>
+            </div>
+            <button id="refreshMachines" class="ghost">刷新</button>
+          </div>
+          <label class="field">Direct daemon URL
+            <input id="directUrl" placeholder="http://192.168.1.10:7317" />
+          </label>
+          <label class="field">访问令牌（可选，匹配 TRICLI_TOKEN）
+            <input id="tokenInput" type="password" placeholder="Bearer token / x-tricli-token" autocomplete="current-password" />
+          </label>
+          <div class="row">
+            <button id="useDirect" class="primary">使用直连</button>
+            <button id="useServer" class="secondary">使用服务器</button>
+          </div>
+          <div id="machineList" class="machine-list"></div>
+        </div>
+
+        <div class="card">
+          <h2>CLI 平台</h2>
+          <div id="providerTabs" class="tabs"></div>
+          <div id="adapterInfo" class="adapter-info">正在检测结构化适配器...</div>
+          <div class="provider-actions">
+            <label class="field">工作目录
+              <input id="cwd" value="/root" />
+            </label>
+            <div class="row wrap">
+              <button id="startSession" class="primary">启动/接管持久会话</button>
+              <button id="stopSession" class="danger">停止</button>
+              <button id="refreshSnapshot" class="secondary">同步</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid main-grid">
+        <div class="card terminal-card">
+          <div class="card-head">
+            <div>
+              <h2>实时任务流 / 终端</h2>
+              <p id="terminalMeta">等待同步</p>
+            </div>
+            <span id="runningBadge" class="badge muted">idle</span>
+          </div>
+          <pre id="terminal" class="terminal">连接后点击“启动/接管持久会话”。</pre>
+          <div class="composer">
+            <textarea id="prompt" rows="3" placeholder="输入给当前 CLI 的指令，例如：继续上一个任务，并汇报进度"></textarea>
+            <button id="sendPrompt" class="primary">发送</button>
+          </div>
+          <div class="row wrap hotkeys">
+            <button data-key="C-c" class="ghost keyBtn">Ctrl+C</button>
+            <button data-key="Escape" class="ghost keyBtn">Esc</button>
+            <button data-key="Enter" class="ghost keyBtn">Enter</button>
+          </div>
+        </div>
+
+        <aside class="card side">
+          <h2>审批中心</h2>
+          <p>检测到 CLI 输出中的权限请求/方案选择后会显示在这里，可远程发送按键回应。</p>
+          <div id="approvals" class="approvals"></div>
+
+          <h2>上传图片 / 文件</h2>
+          <p>上传到目标机器 <code>~/.tricli-remote/daemon/attachments</code>，返回本地路径后可发送给 CLI。</p>
+          <input id="fileInput" type="file" multiple />
+          <button id="uploadFiles" class="secondary full">上传</button>
+          <div id="uploads" class="uploads"></div>
+
+          <h2>结构化 Turn</h2>
+          <p>Codex 使用 app-server JSON-RPC；Claude / Cursor 使用 stream-json；断开 Web/App 后仍由 daemon 继续收集事件。</p>
+          <button id="runStructuredCodex" class="secondary full">用当前输入启动 structured turn</button>
+          <div id="structuredTurns" class="events"></div>
+
+          <h2>CLI 子命令 Job</h2>
+          <p>运行任意 CLI 子命令；Web/App 断开后 job 仍在 daemon 中继续执行，可重连查看。</p>
+          <label class="field">参数（空格分隔，例如 <code>--help</code> 或 <code>mcp list</code>）
+            <input id="jobArgs" placeholder="--help" />
+          </label>
+          <button id="runJob" class="secondary full">启动 CLI Job</button>
+          <div id="jobs" class="events"></div>
+
+          <h2>事件</h2>
+          <div id="events" class="events"></div>
+        </aside>
+      </section>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

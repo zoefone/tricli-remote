@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "TriCLI Remote",
+    "slug": "tricli-remote",
+    "scheme": "tricli",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "android": {
+      "package": "dev.tricli.remote",
+      "permissions": ["POST_NOTIFICATIONS", "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_DATA_SYNC"]
+    },
+    "plugins": ["expo-notifications", "expo-document-picker"]
+  }
+}
